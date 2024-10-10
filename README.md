@@ -1,3 +1,5 @@
+![alt text](img_logo_nithecs_biomath.png "NITheCS - Modelling Biodiversity")
+
 # The National Institute for Theoretical and Computational Sciences (NITheCS)
 https://nithecs.ac.za/modelling-biodiversity/
 
