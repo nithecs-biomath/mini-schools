@@ -2,9 +2,7 @@
 
 # The National Institute for Theoretical and Computational Sciences ([NITheCS](https://nithecs.ac.za/))
 
-## Complexity in Biological Systems (E5) Research Programme
-
-### <span style="color:#0d61db;">E</span>cological <span style="color:#0d61db;">Co</span>mplexity and <span style="color:#0d61db;">Bi</span>odiversity ([<span style="color:#0d61db;">ECoBi</span>](https://nithecs.ac.za/modelling-biodiversity/))
+## <u>E</u>cological <u>Co</u>mplexity and <u>Bi</u>odiversity ([ECoBi](https://nithecs.ac.za/modelling-biodiversity/))
 ECoBi is a work package within the Complexity in Biological Systems (E5) research programme focussed on Unravelling complexity in coupled **E**arth, **E**nvironmental, **E**cological, **E**volutionary and **E**conomic systems.
 We investigate how biodiversity patterns and ecological processes emerge, interact, and evolve across spatial, temporal, and organizational scales. Concurrently, we develop quantitative frameworks and open-source tools to enable rigorous monitoring and analysis of biodiversity under global change.
 ECoBi is structured around five core objectives:
