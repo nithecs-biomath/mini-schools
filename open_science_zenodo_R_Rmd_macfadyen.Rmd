@@ -1,0 +1,499 @@
+---
+title: "Biodiversity Monitoring using Data Cubes"
+subtitle: "Techniques & Applications for Open Science"
+output:
+  html_document:
+    df_print: paged
+---
+
+### Open Science: A practical guide to sharing and disseminating results from Data Cubes
+
+Open Science plays a crucial role in biodiversity monitoring, particularly by fostering collaboration and transparency in research. In the context of our mini-school, "Empowering Biodiversity Monitoring through Data Cubes," we emphasize sharing data and methods to enhance reproducibility and impact. We’ll introduce GitHub for version control and Zenodo for archiving outputs.
+
+### Background Information
+
+Open science makes research more transparent, accessible, and reproducible. In biodiversity, it supports SDG 17 (Partnerships for the Goals). Data cubes give us a practical way to share data, code, and results for reuse and validation.
+
+**Open Science Principles**  
+1. **Transparency**: Share data, code, methods, and interpretations.  
+2. **Accessibility**: Make outputs freely available to all stakeholders.  
+3. **Reproducibility**: Provide complete workflows so others can replicate findings.
+
+### Tools for Open Science in Biodiversity Monitoring
+1. [**GitHub**](https://github.com/): GitHub is a widely used platform for version control and sharing code. It allows researchers to store, manage, and share code for analyses, as well as documentation and tutorials. GitHub repositories can be linked to services like Zenodo to generate Digital Object Identifiers (DOIs), which formalize citation and credit for code and datasets.
+
+2. [**Zenodo**](https://zenodo.org/):Zenodo is an open-access repository developed by CERN, designed to store and share research outputs, including datasets, code, and publications. It allows researchers to easily archive their research in compliance with Open Science mandates and provides DOIs to ensure proper citation.
+
+3. [**GBIF**](https://www.gbif.org/) (Global Biodiversity Information Facility): GBIF is a global database that allows sharing and accessing biodiversity data. Researchers can upload occurrence data from their studies and also retrieve datasets for analysis, ensuring transparency and accessibility in data sharing. The South African National Biodiversity Institute ([SANBI](https://www.sanbi.org/)), funded by the Department of Science and Innovation ([DSTI](https://www.dsti.gov.za/)), hosts the South African Voting Node of GBIF ([SANBI-GBIF](https://www.sanbi-gbif.org/)). 
+
+4. [**Dryad**](https://datadryad.org/): Dryad is a curated resource for the open publication of datasets. It specializes in datasets related to biology and ecology, ensuring that research data is well-preserved, accessible, and easily citable.
+
+5. [**Figshare**](https://info.figshare.com/): Figshare is another general-purpose open repository where researchers can share research data, figures, and even entire projects. It provides detailed metadata and generates DOIs for uploaded content, promoting reuse and citation.
+
+6. [**OpenAIRE**](https://explore.openaire.eu/): OpenAIRE is an open science infrastructure that supports the European Commission’s Open Science agenda. It provides a platform for publishing and sharing research outputs, with a focus on making research easily accessible and interoperable.
+
+7. [**Open Research Europe**](https://www.ore.eu/): This platform offers open access to articles across a wide range of disciplines, including biodiversity. It emphasizes immediate publication followed by open peer review, promoting transparency and accessibility in scientific communication.
+
+8. [**DataONE**](https://www.dataone.org/): DataONE provides access to earth and environmental data from various repositories. It promotes best practices in data management, ensuring that data is shared in a way that supports reproducibility and reuse in biodiversity research.
+
+9. [**OSF**](https://osf.io/) (Open Science Framework): OSF is a platform for managing, sharing, and registering research projects. It allows researchers to share their work at any stage, from initial planning and data collection to analysis and publication.
+
+### Best Practices for Open Science in Biodiversity Research
+
+- **Pre-registration**: Documenting research hypotheses, methodologies, and analysis plans before data collection helps prevent bias and ensures transparency.
+- **Sharing Data and Code**: Releasing datasets and code alongside publications ensures that others can validate and build on the research. Using repositories like GitHub, Zenodo, and GBIF helps promote reuse.
+- **Documentation and Metadata**: Providing thorough documentation, including metadata, enhances the accessibility and usability of shared resources.
+- **Collaborative Platforms**: Tools like GitHub, OSF, and DataONE allow for ongoing collaboration and version control, ensuring that research remains transparent throughout its lifecycle.
+
+By incorporating these tools and principles, this final lecture will provide a comprehensive understanding of how open science enhances biodiversity monitoring, making research outputs more impactful, collaborative, and aligned with global sustainability goals.
+
+---
+
+## Hands-on with R in Colab
+
+![](img/r_colab_300.png)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+### Install missing libraries
+First, ensure that all required packages are available. The following chunk checks for—and installs if necessary—the core packages for HTTP requests, spatial work, data manipulation, and plotting.
+
+```{r install-libs}
+# pkgs = c("httr", "jsonlite", "sf", "ggplot2", "zip", "tmap", "reticulate", "tidyr", "dplyr", "data.table")
+# for(p in pkgs){
+#   if (!requireNamespace(p, quietly = TRUE)) install.packages(p)
+# }
+```
+
+### Load libraries
+Load all packages into the session so we can make HTTP calls, parse JSON, manipulate tables, handle spatial objects, and produce maps.
+
+```{r load-libs}
+library(ggplot2)    # plotting
+library(sf)         # spatial data
+library(httr)       # HTTP
+library(jsonlite)   # JSON
+library(zip)        # unzip
+library(tidyr)      # data tidying
+library(dplyr)      # data manipulation
+library(data.table) # fast I/O
+library(utils)      # unzip, read.delim
+```
+
+### Download GBIF Occurrence Data
+Use the helper function to fetch a GBIF occurrence download (as a ZIP) via the GBIF API, then select a subset of key columns for analysis.
+
+![](img/gbif_300.png)
+
+#### New function `load_from_url_zip()`: Load CSV from ZIP URL
+Define a reusable function load_from_url_zip() that downloads a ZIP archive from a URL, extracts the first CSV found inside, and returns it as a data frame.
+
+```{r load-zip}
+load_from_url_zip = function(zip_url) {
+  res = httr::GET(zip_url)
+  if (httr::status_code(res) != 200) {
+    stop("Download failed: ", httr::status_code(res))
+  }
+  tmp = tempfile(fileext = ".zip")
+  writeBin(httr::content(res, "raw"), tmp)
+  files = utils::unzip(tmp, list = TRUE)$Name
+  csv  = files[grepl("\\.csv$", files)]
+  utils::unzip(tmp, csv, exdir = tempdir())
+  path = file.path(tempdir(), csv)
+  df = data.table::fread(path, sep = "\t", fill = TRUE, data.table = FALSE)
+  unlink(c(tmp, path))
+  df
+}
+```
+
+Use the helper function, `load_from_url_zip()`, to fetch a GBIF occurrence download (as a ZIP) via the GBIF API, then select a subset of key columns for analysis.
+
+```{r download-gbif}
+url_zip = "https://api.gbif.org/v1/occurrence/download/request/0038969-240906103802322.zip"
+df_url  = load_from_url_zip(url_zip)
+df_url  = df_url[, c("year","month","family","speciesKey","species","decimalLatitude","decimalLongitude")]
+head(df_url, 4)
+```
+
+### Read sample CSV from GitHub
+Demonstrate reading a tab‐delimited sample dataset hosted on GitHub.
+
+![](img/github_300.png)
+
+```{r read-github}
+za_data = read.delim(
+  "https://raw.githubusercontent.com/nithecs-biomath/mini-schools/main/data/sample_data_SA.csv",
+  sep = "\t"
+)
+head(za_data, 4)
+```
+
+#### Split year-month and preview
+Separate the combined yearmonth string into distinct year and month columns for easier grouping.
+
+```{r split-yearmonth}
+za_data = za_data %>%
+  separate(yearmonth, into = c("year","month"), sep = "-")
+head(za_data, 4)
+```
+
+#### Read and select GBIF CSV on GitHub
+Alternatively, read the unzipped GBIF CSV directly from GitHub and select key columns again.
+
+```{r read-csv}
+data_csv = read.delim(
+  "https://raw.githubusercontent.com/nithecs-biomath/mini-schools/main/data/0038969-240906103802322.csv",
+  sep = "\t"
+)
+
+# Select the columns to keep
+data_csv = data_csv %>%
+  select(year, month, family, speciesKey, species, decimalLatitude, decimalLongitude)
+head(data_csv, 4)
+```
+
+#### Convert to sf and inspect bounds
+Convert the GBIF table to an sf points object and inspect its geographic extent.
+
+```{r to-sf}
+species_points = st_as_sf(
+  data_csv,
+  coords = c("decimalLongitude","decimalLatitude"),
+  crs = 4326
+)
+
+# Get the extent (bounding box) of the points
+bounds = st_bbox(species_points)
+bounds
+```
+
+#### Create quarter-degree grid and spatial join
+Generate a 0.25° grid across the point extent, assign unique cell IDs, and spatially join observation points to grid cells.
+
+```{r make-grid}
+# Define cell size (0.25 for quarter-degree)
+cell_size = 0.25
+
+# Create the grid (xmin, ymin, xmax, ymax)
+grid = st_make_grid(
+  species_points,
+  cellsize = c(cell_size, cell_size),
+  square = TRUE,
+  what = "polygons"
+)
+
+# Convert grid to an sf object and assign grid IDs
+grid_sf = st_sf(geometry = grid)
+grid_sf$gridID = 1:nrow(grid_sf)
+print(head(grid_sf))
+
+# Perform spatial join to assign species to grid cells
+species_in_grid = st_join(species_points, grid_sf, left = FALSE)
+print(head(species_in_grid))
+```
+
+#### Count unique species per cell
+Aggregate the joined data to compute the number of distinct species observed in each grid cell.
+
+```{r count-species}
+species_count = species_in_grid %>%
+  group_by(gridID) %>%
+  summarise(unique_species = n_distinct(species)) 
+head(species_count, 4)
+
+# Perform spatial join to assign species to grid cells
+count_in_grid = st_join(grid_sf, species_count, left = FALSE)
+head(count_in_grid[,-c(3,4)], 4)
+```
+
+#### Plot species richness on grid
+Visualise the spatial pattern of species richness using a viridis color scale.
+
+```{r plot-grid}
+# Clear the current plot page (if needed)
+# grid::grid.newpage()
+
+# adjust plot size
+options(repr.plot.width = 8, repr.plot.height = 8)
+
+ggplot() +
+  geom_sf(data = count_in_grid, aes(fill = unique_species)) +
+  scale_fill_viridis_c(direction = -1) +
+  theme_minimal() +
+  labs(
+    title = "Quarter-Degree Grid: Count of Unique Species",
+    fill  = "Unique species"
+  )
+```
+
+**Enhanced Plot with Custom Gradient**: For presentations or publications, apply a bespoke color gradient and increase text sizes for clarity.
+
+```{r plot-resize}
+# Increase plot size within Colab
+options(repr.plot.width = 12, repr.plot.height = 12)
+
+# Plot the grid with colors representing the count of unique species
+ggplot() +
+  geom_sf(data = count_in_grid, aes(fill = unique_species)) +
+
+  # Custom color gradient: blue, green, yellow, orange, red
+  scale_fill_gradientn(colors = c("blue", "green", "yellow", "orange", "red")) +
+
+  # Adjust plot size for larger display in Colab
+  theme_minimal() +
+  ggtitle("Quarter-Degree Grid: Count of Unique Species") +
+
+  # Use theme to adjust the plot size
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),  # Increase title size
+    legend.title = element_text(size = 14),               # Increase legend title size
+    legend.text = element_text(size = 12),                # Increase legend text size
+    axis.title = element_text(size = 14),                 # Increase axis title size
+    axis.text = element_text(size = 12),                  # Increase axis text size
+    plot.margin = margin(10, 10, 10, 10),                 # Add margin for better visibility
+    plot.background = element_rect(fill = "white")        # Make sure the background is white
+  )
+```
+
+### Read CSV from Zenodo
+Below we demonstrate two approaches for accessing and inspecting a CSV dataset hosted on Zenodo:
+
+1. **Direct download** — grab the file URL and load it into R.  
+2. **API exploration** — query the Zenodo REST API to discover file metadata, then download and read the CSV.
+
+![](img/zenodo_300.png)
+
+#### Direct Download and Load
+Use a fixed URL to fetch the CSV and inspect its dimensions and a preview of key columns. The example below is for Western Indian Ocean coral diversity observations from 1998–2022 ([DOI: 10.5061/dryad.3xsj3txn1](https://zenodo.org/records/8299696)).
+
+```{r zenodo-download}
+# Define the download URL for the CSV file
+file_url = "https://zenodo.org/records/8299696/files/WesternIndianOceanCoralDiversity.csv?download=1"
+file_name = "data/WesternIndianOceanCoralDiversity.csv"
+
+# Download the file from Zenodo
+download.file(file_url, destfile = file_name)
+
+# Load the dataset (assuming it's a CSV file)
+data = read.csv(file_name)
+
+# View the first few rows of the data
+print(dim(data))
+print(head(data[,c(2,3,5,8,10,11,14:17,40)], 4))
+```
+
+#### Discover via the Zenodo API
+First, retrieve the record’s metadata (including file listings) from Zenodo’s API. Then locate the CSV file URL programmatically.
+
+```{r zenodo-url}
+# Define Zenodo API URL and dataset DOI
+zenodo_api_url = "https://zenodo.org/api/records/"
+record_id = "8299696"  # Record ID for your specific dataset
+
+# Fetch the metadata for the Zenodo record
+response = GET(paste0(zenodo_api_url, record_id))
+metadata = fromJSON(content(response, as = "text", encoding = "UTF-8"))
+
+# View the metadata
+# print(metadata)
+
+# Check the files available in this record
+files = metadata$files
+# print(files)
+str(files)
+
+# Find the CSV file in the record
+csv_row_index = which(grepl("\\.csv$", files$key))  # Find the row index of the CSV file
+csv_file_url = files[csv_row_index, "links"]$self # Extract the download URL
+csv_filename = files[csv_row_index, "key"]        # Extract the filename
+
+# Print the extracted information
+print(csv_file_url)
+print(csv_filename)
+```
+
+#### Download via API-Derived URL
+Use the URL discovered above to download and load the CSV, then preview the same key columns.
+
+```{r zenodo-csv}
+# Download the file from Zenodo
+download.file(csv_file_url, destfile = csv_filename, mode = "wb") # Use mode = "wb" on Windows to ensure the file is written in binary mode.
+
+# Load the dataset (assuming it's a CSV file)
+data = read.csv(csv_filename)
+
+# View the first few rows of the data
+print(head(data[,c(2,3,5,8,10,11,14:17,40)], 4)) # Adjust column indices in head() to focus on columns of interest.
+```
+
+## BONUS SECTION
+
+In this bonus section, we demonstrate how to pull, clean, and visualise biodiversity occurrence data from iNaturalist for South Africa. We will:
+
+1. **Install and load** the necessary R packages.  
+2. **Download** monthly observations from 2012–2023.  
+3. **Filter** out records with missing spatial or temporal information.  
+4. **Crop** the data to the South African mainland.  
+5. **Plot** the spatial distribution of observations.  
+6. **Summarise and plot** species richness over time with confidence intervals.
+
+---
+
+### Package Installation
+
+Before we begin, make sure you have the required packages. The following chunk checks for—and installs if missing—`rinat`, `lubridate`, `rnaturalearth`, and `rnaturalearthdata`.
+
+```{r inat-install}
+# # Install necessary packages
+# if (!requireNamespace("rinat", quietly = TRUE)) {
+#   install.packages("rinat")
+# }
+# if (!requireNamespace("lubridate", quietly = TRUE)) {
+#   install.packages("lubridate")
+# }
+# if (!requireNamespace("rnaturalearth", quietly = TRUE)) {
+#   install.packages("rnaturalearth")
+# }
+# if (!requireNamespace("rnaturalearthdata", quietly = TRUE)) {
+#   install.packages("rnaturalearthdata")
+# }
+```
+
+### Loading Libraries
+Load all packages needed for data retrieval, date handling, and mapping.
+
+```{r inat-libraries}
+library(rinat)
+library(lubridate)
+library(rnaturalearth)
+library(rnaturalearthdata)
+```
+
+### Downloading iNaturalist Observations
+We loop through each month from 2012 to 2023, requesting up to 50 observations per month for South Africa (place_id = 6986). Progress messages are printed to track the download.
+
+![](img/inaturalist_300.png)
+
+```{r inat-download}
+# # Step 1: Download iNaturalist observations for South Africa
+# inat_data = get_inat_obs(place_id = 6986, maxresults = 500)
+# print(head(inat_data, 2))
+
+# Step 1: Download iNaturalist observations for South Africa
+inat_data = data.frame()  # Initialize an empty data frame
+
+for (year in 2012:2023) {  # Loop through years (adjust years as needed)
+  for (month in 1:12) {  # Loop through months
+    # Download observations for the current year and month
+    temp_data = get_inat_obs(
+      place_id = 6986,    # City of Tshwane Metropolitan Municipality
+      maxresults = 50,    # Reduced max. results
+      year = year,        # Added year filter
+      month = month       # Added month filter
+    )
+
+    # Append the filtered data to the main data frame
+    inat_data = rbind(inat_data, temp_data)
+
+    # Print progress to monitor the loop
+    # print(paste("Downloaded data for:", year, "-", month))
+  }
+}
+
+print(head(inat_data, 4))
+```
+
+### Filtering Records
+Remove any observations lacking coordinates or observation dates, then extract the observation year for later summaries.
+
+```{r inat-filter}
+# Step 1: Filter out records without coordinates and dates
+inat_data = inat_data %>%
+  filter(!is.na(longitude) & !is.na(latitude) & !is.na(observed_on))
+print(dim(inat_data))
+
+# Step 2: Extract year from the date and calculate species richness
+inat_data = inat_data %>%
+  mutate(year = year(observed_on)) # Extract year from observed_on
+print(dim(inat_data))
+```
+
+### Defining the Study Area
+Load the South Africa polygon and crop to a specified bounding box to exclude outlying islands or territories.
+
+```{r inat-rsa}
+# Step 1: Load SA polygon
+south_africa = ne_countries(
+  scale      = "medium",
+  country    = "South Africa",
+  returnclass= "sf"
+)
+
+# Step 2: Define your extent as an sf bbox (xmin, ymin, xmax, ymax)
+my_bbox = st_bbox(
+  c(xmin = 16.450,
+    ymin = -34.835,
+    xmax = 32.945,
+    ymax = -22.125),
+  crs = st_crs(south_africa)
+)
+
+# Step 3: Crop
+south_africa_noIslands = st_crop(south_africa, my_bbox)
+# names(south_africa_noIslands)
+```
+
+### Spatial Visualization
+Plot all filtered iNaturalist points over the mainland map to show their geographic distribution.
+
+```{r inat-plot1}
+# Increase plot size within Colab
+options(repr.plot.width = 10, repr.plot.height = 15)
+
+# Step 4: Plot iNaturalist records on a map
+ggplot() +
+  geom_sf(data = south_africa_noIslands, fill = "lightgreen", color = "black") +
+  geom_point(data = inat_data, aes(x = longitude, y = latitude), color = "blue", alpha = 0.6) +
+  labs(title = "iNaturalist Observations in South Africa",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+### Temporal Trends in Species Richness
+Compute annual species richness and observation counts, estimate simple 95% confidence intervals, and plot the trend over time.
+
+```{r inat-year}
+# Step 5: Group by year and calculate species richness and observation count per year
+yearly_stats = inat_data %>%
+  group_by(year) %>%
+  summarise(
+    species_richness = n_distinct(scientific_name),  # Unique species count
+    observation_count = n()  # Total observations
+  ) %>%
+  ungroup()
+
+# Step 5: Add confidence intervals based on observation count
+# Assuming we can use a basic approximation for CI: 1.96 * (species richness / sqrt(observation count))
+yearly_stats = yearly_stats %>%
+  mutate(
+    ci_upper = species_richness + 1.96 * (species_richness / sqrt(observation_count)),
+    ci_lower = species_richness - 1.96 * (species_richness / sqrt(observation_count))
+  )
+
+# Increase plot size within Colab
+options(repr.plot.width = 15, repr.plot.height = 10)
+
+# Step 6: Plot the species richness over time with confidence intervals
+ggplot(yearly_stats, aes(x = year, y = species_richness)) +
+  geom_line(color = "blue", size = 1) +
+  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper), alpha = 0.2, fill = "lightblue") +
+  labs(title = "Species Richness Over Time (iNaturalist Observations)",
+       x = "Year", y = "Species Richness") +
+  theme_minimal()
+```
